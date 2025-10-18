@@ -1,10 +1,4 @@
----
-
-## 2) Repo File — `contracts/AidAccessEscrowV2.sol`
-
-This is the first repo file. It's written to be copy/paste ready into a Hardhat project (replace the placeholder interfaces with OpenZeppelin imports or your audited interfaces as you prefer). I include explanatory `<!-- ... -->` blocks at the top and inline NatSpec-style comments. No self-destruct. Timelocked disable & re-enable flow included. Plenty of events for auditability.
-
-```solidity
+solidity
 <!-- ========================================================= -->
 <!-- contracts/AidAccessEscrowV2.sol                              -->
 <!-- Aid Access Escrow V2 — Guardian-governed humanitarian escrow -->
