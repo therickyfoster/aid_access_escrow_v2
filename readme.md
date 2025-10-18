@@ -100,6 +100,35 @@ When misused, the system disables itself rather than enabling harm — through h
 
 ---
 
+<!-- ================= Escrow Flow Diagram — Drop-in for Profile README ================= -->
+
+## 🔗 Aid Access Escrow — Flow Diagram
+
+```mermaid
+flowchart LR
+  F[Funders] -->|Deposit USDC/DAI| E[Escrow Contract]
+  E -->|await attestations| O[Oracle Mesh]
+  O -->|attest: corridorHours / kgDelivered| E
+  subgraph Governance
+    G[Guardian Multisig]
+    T[Timelock Controller]
+  end
+  E -->|release tranche →| A[Aid Operator]
+  G -.->|requestDisable / finalizeDisable (72h)| E
+  O -.->|evidence → IPFS / EAS| IPFS[IPFS + EAS]
+  E -->|emit events| Explorer[Block Explorer / Audit UI]
+  style F fill:#f8fafc, stroke:#2d3748
+  style E fill:#38a169, stroke:#2d3748, color:#fff
+  style O fill:#3182ce, stroke:#2d3748, color:#fff
+  style G fill:#805ad5, stroke:#2d3748, color:#fff
+  style A fill:#dd6b20, stroke:#2d3748, color:#fff
+  style IPFS fill:#65C2CB, stroke:#2d3748
+  style Explorer fill:#0f172a, stroke:#2d3748, color:#fff
+
+<!-- ================= End Escrow Flow Diagram ================= -->
+
+---
+
 ## 📜 Verification Chain
 
 1. Compute local SHA-256 of build → compare with on-chain `sourceHash`.  
