@@ -106,7 +106,6 @@ When misused, the system disables itself rather than enabling harm — through h
 
 ## 🔗 Aid Access Escrow — Flow Diagram (GitHub-safe)
 
-```mermaid
 flowchart LR
   F[Funders] -->|Deposit USDC or DAI| E[Escrow Contract]
   E -->|Wait for attestations| O[Oracle Mesh]
