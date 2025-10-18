@@ -104,26 +104,24 @@ When misused, the system disables itself rather than enabling harm — through h
 
 ## 🔗 Aid Access Escrow — Flow Diagram
 
-mermaid
+## 🔗 Aid Access Escrow — Flow Diagram (GitHub-safe)
+
+```mermaid
 flowchart LR
-  F[Funders] -->|Deposit USDC/DAI| E[Escrow Contract]
-  E -->|await attestations| O[Oracle Mesh]
-  O -->|attest: corridorHours / kgDelivered| E
+  F[Funders] -->|Deposit USDC or DAI| E[Escrow Contract]
+  E -->|Wait for attestations| O[Oracle Mesh]
+  O -->|Attest corridorHours and kgDelivered| E
+
   subgraph Governance
     G[Guardian Multisig]
-    T[Timelock Controller]
+    T[Timelock]
   end
-  E -->|release tranche →| A[Aid Operator]
-  G -.->|requestDisable / finalizeDisable (72h)| E
-  O -.->|evidence → IPFS / EAS| IPFS[IPFS + EAS]
-  E -->|emit events| Explorer[Block Explorer / Audit UI]
-  style F fill:#f8fafc, stroke:#2d3748
-  style E fill:#38a169, stroke:#2d3748, color:#fff
-  style O fill:#3182ce, stroke:#2d3748, color:#fff
-  style G fill:#805ad5, stroke:#2d3748, color:#fff
-  style A fill:#dd6b20, stroke:#2d3748, color:#fff
-  style IPFS fill:#65C2CB, stroke:#2d3748
-  style Explorer fill:#0f172a, stroke:#2d3748, color:#fff
+
+  E -->|Release tranche| A[Aid Operator]
+  G -.->|Request disable| E
+  T -.->|Delay before finalize| E
+
+  E -->|Emit events| X[Block Explorer and Audit UI]
 
 <!-- ================= End Escrow Flow Diagram ================= -->
 
