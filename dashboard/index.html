@@ -1,1 +1,214 @@
+<!-- =========================================================
+     dashboard/index.html
+     Aid Access Escrow V2 — Integrity & Status Dashboard
+     -----------------------------------------------------
+     Purpose:
+       • Verify local build SHA-256 against on-chain sourceHash
+       • Read core contract state for transparent audits
+       • Zero build tools, vanilla JS, minimal CSS hook classes
+     Usage:
+       1) Host this folder (or open file:// for local tests)
+       2) Enter RPC URL + Contract Address
+       3) Click “Connect & Load”
+       4) (Optional) Choose a local file to hash & compare
+     Notes:
+       • No secrets stored. Uses public RPC; read-only.
+       • Add a Service Worker later for offline caching if desired.
+   ========================================================= -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Aid Access Escrow — Integrity Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Verify build integrity (SHA-256) against on-chain sourceHash and inspect contract status.">
+  <link rel="stylesheet" href="./style.css">
 
+  <!-- Ethers v6 (browser build) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js"></script>
+  <!-- App logic -->
+  <script defer src="./app.js"></script>
+
+  <!-- Minimal ABI (inline JSON) for read-only + setSourceHash signature reference.
+       app.js will parse this JSON via document.getElementById('abi-json').textContent -->
+  <script type="application/json" id="abi-json">
+  [
+    { "inputs": [], "name": "guardianMultisig", "outputs": [{"internalType":"address","name":"","type":"address"}], "stateMutability":"view", "type":"function" },
+    { "inputs": [], "name": "sourceHash", "outputs": [{"internalType":"bytes32","name":"","type":"bytes32"}], "stateMutability":"view", "type":"function" },
+    { "inputs": [], "name": "disabled", "outputs": [{"internalType":"bool","name":"","type":"bool"}], "stateMutability":"view", "type":"function" },
+    { "inputs": [], "name": "hoursTarget", "outputs": [{"internalType":"uint256","name":"","type":"uint256"}], "stateMutability":"view", "type":"function" },
+    { "inputs": [], "name": "kgTarget", "outputs": [{"internalType":"uint256","name":"","type":"uint256"}], "stateMutability":"view", "type":"function" },
+    { "inputs": [], "name": "tranche", "outputs": [{"internalType":"uint256","name":"","type":"uint256"}], "stateMutability":"view", "type":"function" },
+    { "inputs": [{"internalType":"bytes32","name":"periodId","type":"bytes32"}], "name": "getPeriod", "outputs": [
+        {"internalType":"uint256","name":"corridorHours","type":"uint256"},
+        {"internalType":"uint256","name":"kgDelivered","type":"uint256"},
+        {"internalType":"bool","name":"paid","type":"bool"},
+        {"internalType":"uint256","name":"createdAt","type":"uint256"}
+      ], "stateMutability":"view", "type":"function"
+    },
+    { "inputs": [{"internalType":"bytes32","name":"id","type":"bytes32"}], "name":"periodMeetsTargets", "outputs":[{"internalType":"bool","name":"","type":"bool"}], "stateMutability":"view", "type":"function" }
+  ]
+  </script>
+
+  <!-- Lightweight icons (Lucide) for nice buttons, optional -->
+  <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>🛡️ Aid Access Escrow <span class="muted">— Integrity & Status</span></h1>
+    <p class="sub">Verification is compassion translated into code.</p>
+  </header>
+
+  <!-- ===================== Connection Panel ===================== -->
+  <section class="card" aria-labelledby="conn-title">
+    <h2 id="conn-title">1) Connect (read-only)</h2>
+    <div class="grid two">
+      <label class="stack">
+        <span class="label">RPC URL <small class="muted">(e.g., https://arb-mainnet.g.alchemy.com/v2/…)</small></span>
+        <input id="rpcUrl" type="url" placeholder="https://..." inputmode="url" autocomplete="off" />
+      </label>
+
+      <label class="stack">
+        <span class="label">Contract Address</span>
+        <input id="contractAddr" type="text" placeholder="0x…" spellcheck="false" autocomplete="off" />
+      </label>
+    </div>
+
+    <div class="row">
+      <button id="btnConnect" class="btn primary">
+        <i data-lucide="plug"></i><span>Connect & Load</span>
+      </button>
+      <button id="btnCopyConfig" class="btn ghost" title="Copy current config to clipboard">
+        <i data-lucide="clipboard"></i><span>Copy Config</span>
+      </button>
+      <span id="connStatus" class="status muted">Not connected</span>
+    </div>
+
+    <details class="hint">
+      <summary>What’s this?</summary>
+      <p>This dashboard never asks for a wallet. It uses a public RPC in read-only mode to fetch state from your deployed contract.</p>
+    </details>
+  </section>
+
+  <!-- ===================== Contract Overview ===================== -->
+  <section class="card" aria-labelledby="state-title">
+    <h2 id="state-title">2) Contract State</h2>
+
+    <div id="stateGrid" class="grid three equal">
+      <div class="kv"><div class="k">Guardian</div><div class="v mono" id="guardian">—</div></div>
+      <div class="kv"><div class="k">Disabled</div><div class="v" id="disabled">—</div></div>
+      <div class="kv"><div class="k">Tranche</div><div class="v mono" id="tranche">—</div></div>
+      <div class="kv"><div class="k">Hours Target</div><div class="v mono" id="hoursTarget">—</div></div>
+      <div class="kv"><div class="k">KG Target</div><div class="v mono" id="kgTarget">—</div></div>
+      <div class="kv"><div class="k">Source Hash (on-chain)</div><div class="v hash mono" id="sourceHash">—</div></div>
+    </div>
+
+    <div class="row">
+      <button id="btnRefresh" class="btn">
+        <i data-lucide="refresh-cw"></i><span>Refresh</span>
+      </button>
+      <button id="btnCopyState" class="btn ghost">
+        <i data-lucide="clipboard"></i><span>Copy State</span>
+      </button>
+      <span id="stateMsg" class="status muted">—</span>
+    </div>
+  </section>
+
+  <!-- ===================== File Hash Verify ===================== -->
+  <section class="card" aria-labelledby="verify-title">
+    <h2 id="verify-title">3) Verify Local Build</h2>
+    <p class="muted">Choose the exact artifact you plan to release (e.g., <code>moduleA-package.zip</code>). The page will compute SHA-256 locally (Web Crypto) and compare against the on-chain <code>sourceHash</code>.</p>
+
+    <div class="grid two">
+      <label class="stack">
+        <span class="label">Local file to hash</span>
+        <input id="filePick" type="file" />
+      </label>
+
+      <label class="stack">
+        <span class="label">Computed SHA-256 (hex)</span>
+        <input id="localHash" type="text" class="mono" readonly placeholder="—" />
+      </label>
+    </div>
+
+    <div class="row">
+      <button id="btnHash" class="btn">
+        <i data-lucide="fingerprint"></i><span>Compute</span>
+      </button>
+      <button id="btnCompare" class="btn">
+        <i data-lucide="scales"></i><span>Compare vs On-Chain</span>
+      </button>
+      <button id="btnCopyHash" class="btn ghost">
+        <i data-lucide="clipboard"></i><span>Copy Hash</span>
+      </button>
+      <span id="verifyMsg" class="status muted">—</span>
+    </div>
+
+    <div id="comparePanel" class="compare hidden" role="status" aria-live="polite">
+      <div class="cmp-row">
+        <div class="cmp-label">On-chain bytes32</div>
+        <div class="cmp-value mono" id="onchainBytes32">—</div>
+      </div>
+      <div class="cmp-row">
+        <div class="cmp-label">Local hex → bytes32</div>
+        <div class="cmp-value mono" id="localBytes32">—</div>
+      </div>
+      <div class="cmp-outcome" id="cmpOutcome">—</div>
+    </div>
+  </section>
+
+  <!-- ===================== Period Inspector ===================== -->
+  <section class="card" aria-labelledby="period-title">
+    <h2 id="period-title">4) Period Inspector</h2>
+    <p class="muted">Query a specific <code>periodId</code> (32-byte key). Paste a hex value (0x…) you derive off-chain (e.g., keccak256 of “2025-W41”).</p>
+
+    <div class="grid three equal">
+      <label class="stack">
+        <span class="label">periodId (bytes32)</span>
+        <input id="periodId" type="text" placeholder="0x…" class="mono" autocomplete="off" spellcheck="false" />
+      </label>
+
+      <div class="stack">
+        <span class="label">Meets Targets?</span>
+        <div id="meetsTargets" class="badge">—</div>
+      </div>
+
+      <div class="stack">
+        <span class="label">&nbsp;</span>
+        <button id="btnReadPeriod" class="btn"><i data-lucide="search"></i><span>Read Period</span></button>
+      </div>
+    </div>
+
+    <div id="periodPanel" class="period card-lite hidden">
+      <div class="grid four equal">
+        <div class="kv"><div class="k">Corridor Hours</div><div class="v mono" id="pHours">—</div></div>
+        <div class="kv"><div class="k">KG Delivered</div><div class="v mono" id="pKg">—</div></div>
+        <div class="kv"><div class="k">Paid</div><div class="v" id="pPaid">—</div></div>
+        <div class="kv"><div class="k">Created At</div><div class="v mono" id="pCreated">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Footer ===================== -->
+  <footer class="foot">
+    <div class="row">
+      <span class="muted">© Foster + Navi · Planetary Restoration Archive</span>
+      <span class="muted">
+        Built with 🧠 + 🌱 ·
+        <a href="https://planetaryrestorationarchive.com" target="_blank" rel="noopener">PRA</a>
+      </span>
+    </div>
+    <details>
+      <summary>About this dashboard</summary>
+      <p>All verification is client-side. File hashing uses the browser’s SubtleCrypto API; no file leaves your device. Contract reads are via your provided RPC URL.</p>
+    </details>
+  </footer>
+
+  <!-- Icon init -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      try { lucide?.createIcons(); } catch (e) {}
+    });
+  </script>
+</body>
+</html>
